@@ -1,0 +1,137 @@
+# ============================================================================
+# Next-Gen Real-Time Object Detection & Classification System
+# Configuration File — Tuned for Maximum Accuracy
+# ============================================================================
+
+system:
+  task: "detection"            # "classification" or "detection"
+  seed: 42
+  mixed_precision: true
+  deterministic: false         # Set true for reproducibility (slower)
+
+# ============================================================================
+# DATA CONFIGURATION
+# ============================================================================
+data:
+  dataset_path: "data/dataset"
+  detection_dataset: "coco8.yaml"  # "coco.yaml", "coco8.yaml", "open-images-v7.yaml", "roboflow", or local .yaml
+  roboflow:
+    api_key: "YOUR_API_KEY"
+    workspace: "your-workspace"
+    project: "your-project"
+    version: 1
+
+  # Classification settings
+  image_size: [224, 224]       # Classification input size
+  batch_size: 32
+  validation_split: 0.2
+  test_split: 0.1
+  autotune: true
+
+  # Detection settings (YOLOv8)
+  detection_imgsz: 640         # YOLOv8 optimal size (320/416/512/640/1280)
+  detection_batch: 16          # Adjust based on GPU VRAM
+
+# ============================================================================
+# MODEL CONFIGURATION
+# ============================================================================
+model:
+  # --- Classification ---
+  backbone: "MobileNetV2"      # "MobileNetV2", "EfficientNetB0", "EfficientNetB3", "EfficientNetV2S"
+  weights: "imagenet"
+  freeze_base: true
+  num_classes: 10              # Update for your classification dataset
+  dropout_rate: 0.3
+  l2_reg: 0.0005
+  label_smoothing: 0.1
+  head_hidden_units: [512, 256]   # Dense head layers
+
+  # --- Detection ---
+  yolo_model: "yolov8s.pt"    # "yolov8n.pt"(fast) / "yolov8s.pt"(balanced) / "yolov8m.pt"(accurate) / "yolov8l.pt" / "yolov8x.pt"
+  pretrained: true
+
+# ============================================================================
+# TRAINING CONFIGURATION
+# ============================================================================
+training:
+  # --- Shared ---
+  epochs: 100
+  learning_rate: 0.001
+  optimizer: "adamw"           # "adam", "adamw", "sgd"
+  weight_decay: 0.0005
+  early_stopping_patience: 15
+  reduce_lr_patience: 7
+  warmup_epochs: 5
+
+  # --- Classification fine-tuning ---
+  fine_tune_epochs: 50
+  fine_tune_lr: 0.00005
+  unfreeze_layers: 80
+  cosine_decay: true           # Use cosine annealing LR schedule
+
+  # --- Detection (YOLOv8 hyperparameters) ---
+  detection:
+    patience: 30               # Early stopping patience for detection
+    optimizer: "auto"          # "SGD", "Adam", "AdamW", "auto"
+    lr0: 0.01                  # Initial learning rate
+    lrf: 0.01                  # Final LR = lr0 * lrf
+    momentum: 0.937
+    weight_decay: 0.0005
+    warmup_epochs: 3.0
+    warmup_momentum: 0.8
+    warmup_bias_lr: 0.1
+    cos_lr: true               # Cosine LR schedule
+    close_mosaic: 10           # Disable mosaic for last N epochs
+    # Augmentation hyperparameters
+    hsv_h: 0.015               # Hue augmentation
+    hsv_s: 0.7                 # Saturation augmentation
+    hsv_v: 0.4                 # Value augmentation
+    degrees: 0.0               # Rotation degrees
+    translate: 0.1
+    scale: 0.5                 # Scale augmentation (+/- gain)
+    shear: 0.0
+    perspective: 0.0
+    flipud: 0.0                # Flip up-down probability
+    fliplr: 0.5                # Flip left-right probability
+    mosaic: 1.0                # Mosaic augmentation probability
+    mixup: 0.15                # MixUp augmentation probability
+    copy_paste: 0.1            # Copy-paste augmentation probability
+    erasing: 0.4               # Random erasing probability
+    multi_scale: false         # Multi-scale training (variable imgsz)
+
+# ============================================================================
+# INFERENCE CONFIGURATION
+# ============================================================================
+inference:
+  confidence_threshold: 0.25    # Lower threshold = more detections
+  iou_threshold: 0.45
+  max_det: 300                  # Maximum detections per image
+  device: "auto"                # "auto", "cpu", "0" (GPU 0), "0,1" (multi-GPU)
+  backend: "auto"               # "auto", "tf", "tflite", "onnx", "yolo"
+  half: false                   # FP16 inference (GPU only)
+  augment: false                # Test-Time Augmentation (TTA) — slower but more accurate
+  agnostic_nms: false           # Class-agnostic NMS
+  retina_masks: false           # High-res segmentation masks (if applicable)
+  vid_stride: 1                 # Video frame-rate stride
+
+# ============================================================================
+# EXPORT CONFIGURATION
+# ============================================================================
+export:
+  export_dir: "outputs/models"
+  quantization: "fp16"          # "none", "fp16", "int8"
+  format: "onnx"                # "tflite", "onnx", "torchscript", "engine" (TensorRT)
+  dynamic: true                 # Dynamic batch size for ONNX
+  simplify: true                # Simplify ONNX graph
+  opset: 17                     # ONNX opset version
+
+# ============================================================================
+# LOGGING & TRACKING
+# ============================================================================
+logging:
+  tensorboard: true
+  wandb: false                  # Set to true if wandb is configured
+  log_dir: "logs"
+  save_period: 10               # Save checkpoint every N epochs
+  plots: true                   # Generate training plots
+  verbose: true
