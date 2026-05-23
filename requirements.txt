@@ -5,7 +5,8 @@ torchvision>=0.15.0
 ultralytics>=8.1.0
 
 # Image & Data Processing
-opencv-python>=4.8.0
+opencv-python>=4.8.0; sys_platform != "linux"
+opencv-python-headless>=4.8.0; sys_platform == "linux"
 numpy>=1.24.0
 pandas>=2.0.0
 matplotlib>=3.7.0
