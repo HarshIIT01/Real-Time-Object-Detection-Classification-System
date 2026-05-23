@@ -141,9 +141,13 @@ def load_inference_model(model_path, backend='tf'):
         logger.info(f"TFLite model loaded: {model_path}")
         return interpreter
     elif backend == 'tf':
-        model = tf.keras.models.load_model(model_path)
-        logger.info(f"Keras model loaded: {model_path}")
+        # compile=False avoids deserializing optimizer/schedule objects,
+        # which can break when older training artifacts used non-registered
+        # custom learning rate schedules.
+        model = tf.keras.models.load_model(model_path, compile=False)
+        logger.info(f"Keras model loaded (compile=False): {model_path}")
         return model
+
     else:
         raise ValueError(f"Unsupported backend: {backend}")
 

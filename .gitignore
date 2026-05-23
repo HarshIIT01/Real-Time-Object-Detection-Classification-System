@@ -1,23 +1,31 @@
 # Python cache
 __pycache__/
 *.pyc
+.pytest_cache/
 
 # Virtual environment
 venv/
 
-# Model weights
+# Model weights and exports
 *.pt
 *.onnx
+*.tflite
+*.keras
+*.h5
+*.engine
+*.tar
 
-# Outputs
+# Outputs and runs
 outputs/
 runs/
+logs/
+*.log
 
-# Dataset
+# Datasets
 data/
+datasets/
 
-# Environment files
+# Environment files and IDEs
 .env
-
-# VS Code
 .vscode/
+.idea/

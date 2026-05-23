@@ -16,7 +16,7 @@ def benchmark_tf(model_path, input_shape=(1, 224, 224, 3), num_runs=100, warmup_
     import tensorflow as tf
 
     print(f"Benchmarking TF model: {model_path}")
-    model = tf.keras.models.load_model(model_path)
+    model = tf.keras.models.load_model(model_path, compile=False)
     dummy = np.random.random(input_shape).astype(np.float32)
 
     print(f"Warming up ({warmup_runs} runs)...")
@@ -87,7 +87,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     ext = os.path.splitext(args.model)[1].lower()
-    if ext in ('.pt', '.pth', '.engine'):
+    if ext in ('.pt', '.pth', '.engine', '.onnx'):
         benchmark_yolo(args.model, imgsz=args.imgsz, num_runs=args.runs)
     else:
         benchmark_tf(args.model, num_runs=args.runs)

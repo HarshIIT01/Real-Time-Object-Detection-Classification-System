@@ -6,10 +6,9 @@ import tensorflow as tf
 import os
 import logging
 
-from src.augmentations import get_training_augmentation, mixup, cutmix, random_erasing
+from src.augmentations import get_training_augmentation, mixup
 
 logger = logging.getLogger("RT_ObjectDetection")
-
 
 class DataLoader:
     """Efficient tf.data-based data loader for image classification."""
@@ -146,7 +145,10 @@ class DataLoader:
                 if count >= num_samples:
                     break
                 img = tf.cast(img_batch, tf.float32)
-                img = tf.keras.applications.mobilenet_v2.preprocess_input(img)
+                from src.model import get_preprocess_fn
+                backbone = self.config['model'].get('backbone', 'MobileNetV2')
+                preprocess_fn = get_preprocess_fn(backbone)
+                img = preprocess_fn(img)
                 yield [img]
                 count += 1
 

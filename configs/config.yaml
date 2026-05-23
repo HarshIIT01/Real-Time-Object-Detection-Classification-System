@@ -2,9 +2,13 @@
 # Next-Gen Real-Time Object Detection & Classification System
 # Configuration File — Tuned for Maximum Accuracy
 # ============================================================================
+# IMPORTANT: Always train via  python -m src.train --config configs/config.yaml
+# Do NOT pass YOLO args manually — that bypasses this config and causes
+# config/run mismatches (imgsz, augmentation, cos_lr, etc.).
+# ============================================================================
 
 system:
-  task: "detection"            # "classification" or "detection"
+  task: "classification"            # "classification" or "detection"
   seed: 42
   mixed_precision: true
   deterministic: false         # Set true for reproducibility (slower)
@@ -12,9 +16,11 @@ system:
 # ============================================================================
 # DATA CONFIGURATION
 # ============================================================================
+# WARNING: Do not override these settings via CLI arguments.
+# ============================================================================
 data:
   dataset_path: "data/dataset"
-  detection_dataset: "coco8.yaml"  # "coco.yaml", "coco8.yaml", "open-images-v7.yaml", "roboflow", or local .yaml
+  detection_dataset: "coco128.yaml"  # "coco.yaml", "coco8.yaml", "coco128.yaml", "open-images-v7.yaml", "roboflow", or local .yaml
   roboflow:
     api_key: "YOUR_API_KEY"
     workspace: "your-workspace"
@@ -30,7 +36,7 @@ data:
 
   # Detection settings (YOLOv8)
   detection_imgsz: 640         # YOLOv8 optimal size (320/416/512/640/1280)
-  detection_batch: 16          # Adjust based on GPU VRAM
+  detection_batch: 8           # Safe default for 4–8 GB VRAM; YOLO auto-scales
 
 # ============================================================================
 # MODEL CONFIGURATION

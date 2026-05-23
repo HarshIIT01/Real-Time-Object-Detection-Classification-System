@@ -13,7 +13,7 @@ logger = logging.getLogger("RT_ObjectDetection")
 def export_tflite(model_path, output_dir, quantization="fp16", representative_gen=None):
     """Export Keras model to TFLite with optional quantization."""
     print(f"Converting {model_path} → TFLite ({quantization})...")
-    model = tf.keras.models.load_model(model_path)
+    model = tf.keras.models.load_model(model_path, compile=False)
     converter = tf.lite.TFLiteConverter.from_keras_model(model)
 
     if quantization == "fp16":
@@ -45,8 +45,12 @@ def export_onnx(model_path, output_dir):
     try:
         import tf2onnx
         print(f"Converting {model_path} → ONNX...")
-        model = tf.keras.models.load_model(model_path)
-        spec = (tf.TensorSpec((None, 224, 224, 3), tf.float32, name="input"),)
+        model = tf.keras.models.load_model(model_path, compile=False)
+        input_shape = model.input_shape
+        if isinstance(input_shape, list):
+            input_shape = input_shape[0]
+        dynamic_shape = (None,) + input_shape[1:]
+        spec = (tf.TensorSpec(dynamic_shape, tf.float32, name="input"),)
         output_path = os.path.join(output_dir, "model.onnx")
         os.makedirs(output_dir, exist_ok=True)
         tf2onnx.convert.from_keras(model, input_signature=spec, opset=17, output_path=output_path)

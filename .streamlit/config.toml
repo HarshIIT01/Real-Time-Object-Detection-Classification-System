@@ -1,0 +1,8 @@
+[server]
+# Disable the file watcher to prevent Streamlit from crashing when log files, 
+# checkpoints, or training results are written to the workspace (Windows file locks).
+fileWatcherType = "none"
+
+[browser]
+# Turn off telemetry to speed up page loads and improve privacy
+gatherUsageStats = false

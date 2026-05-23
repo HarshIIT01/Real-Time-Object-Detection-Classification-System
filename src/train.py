@@ -78,33 +78,20 @@ def _get_lr_schedule(config, steps_per_epoch):
             alpha=1e-6,
         )
 
-        class WarmupCosineSchedule(tf.keras.optimizers.schedules.LearningRateSchedule):
-            def __init__(self, warmup, cosine, warmup_steps):
-                super().__init__()
-                self.warmup = warmup
-                self.cosine = cosine
-                self.warmup_steps = warmup_steps
-
-            def __call__(self, step):
-                return tf.cond(
-                    step < self.warmup_steps,
-                    lambda: self.warmup(step),
-                    lambda: self.cosine(step - self.warmup_steps),
-                )
-
-            def get_config(self):
-                return {
-                    "warmup_steps": self.warmup_steps,
-                }
+        # Use a registered/serializable LR schedule so inference can load the model.
+        from src.lr_schedules import WarmupCosineSchedule
 
         return WarmupCosineSchedule(warmup_schedule, cosine_schedule, warmup_steps)
     else:
         return lr  # Static LR, rely on ReduceLROnPlateau
 
 
+
 def _get_callbacks(config, class_names=None):
     """Creates training callbacks."""
-    export_dir = config['export']['export_dir']
+    # Use a classification-specific subdirectory so YOLO and TF
+    # artifacts do not collide under outputs/models/
+    export_dir = os.path.join(config['export']['export_dir'], 'classification')
     os.makedirs(export_dir, exist_ok=True)
 
     callbacks = [
@@ -163,7 +150,11 @@ def train_classification(config):
     if config['system']['mixed_precision']:
         enable_mixed_precision()
 
-    os.makedirs(config['export']['export_dir'], exist_ok=True)
+    # Use classification-specific subdir
+    clf_export_dir = os.path.join(config['export']['export_dir'], 'classification')
+    os.makedirs(clf_export_dir, exist_ok=True)
+    # Temporarily inject subdir so helpers pick it up
+    config['export']['_clf_export_dir'] = clf_export_dir
 
     if WANDB_AVAILABLE and config.get('logging', {}).get('wandb', False):
         wandb.init(project="real-time-object-detection", config=config)
@@ -262,8 +253,10 @@ def train_classification(config):
         "phase1_val_loss": float(min(history1.history.get('val_loss', [999]))),
         "phase2_val_loss": float(min(history2.history.get('val_loss', [999]))),
     }
-    save_training_metadata(config, final_metrics, config['export']['export_dir'])
+    save_training_metadata(config, final_metrics, clf_export_dir)
     logger.info(f"Training complete. Best val accuracy: {final_metrics['phase2_val_accuracy']:.4f}")
+    logger.info(f"Classification artifacts saved to: {clf_export_dir}")
+
 
     if WANDB_AVAILABLE and config.get('logging', {}).get('wandb', False):
         wandb.finish()
@@ -313,7 +306,7 @@ def train_detection(config):
     batch = config['data'].get('detection_batch', 16)
     epochs = config['training'].get('epochs', 100)
 
-    # Determine device
+    # ── Determine device ──
     device_cfg = config['inference'].get('device', 'auto')
     if device_cfg == 'auto':
         import torch
@@ -321,8 +314,37 @@ def train_detection(config):
     else:
         device = device_cfg
 
-    logger.info(f"Training config: imgsz={imgsz}, batch={batch}, epochs={epochs}, device={device}")
-    logger.info(f"Dataset: {yaml_path}")
+    # Warn when training on CPU
+    if str(device) == 'cpu':
+        logger.warning(
+            "\u26a0\ufe0f  TRAINING ON CPU — this will be very slow and may not complete "
+            "the intended epoch schedule. For production quality, use a GPU."
+        )
+
+    # Assert image size is valid before handing to YOLO
+    if not (imgsz >= 320 and imgsz % 32 == 0):
+        raise ValueError(
+            f"detection_imgsz={imgsz} is invalid. Must be >= 320 and divisible by 32. "
+            f"Check configs/config.yaml → data.detection_imgsz"
+        )
+
+    # On CPU, force workers=0 to avoid Windows multiprocessing deadlocks
+    num_workers = 0 if str(device) == 'cpu' else 8
+
+    # Log augmentation config so every run is fully auditable
+    logger.info(
+        f"TRAINING CONFIG SUMMARY\n"
+        f"  imgsz      : {imgsz}\n"
+        f"  batch      : {batch}\n"
+        f"  epochs     : {epochs}\n"
+        f"  device     : {device}\n"
+        f"  cos_lr     : {det_cfg.get('cos_lr', True)}\n"
+        f"  mosaic     : {det_cfg.get('mosaic', 1.0)}\n"
+        f"  mixup      : {det_cfg.get('mixup', 0.15)}\n"
+        f"  copy_paste : {det_cfg.get('copy_paste', 0.1)}\n"
+        f"  optimizer  : {det_cfg.get('optimizer', 'auto')}\n"
+    )
+
 
     # ── Train ──
     results = model.train(
@@ -334,6 +356,7 @@ def train_detection(config):
         name="yolov8_run",
         exist_ok=True,
         device=device,
+        workers=num_workers,       # Set to 0 on CPU to avoid Windows deadlocks
         # Optimizer & LR
         optimizer=det_cfg.get('optimizer', 'auto'),
         lr0=det_cfg.get('lr0', 0.01),
@@ -343,10 +366,10 @@ def train_detection(config):
         warmup_epochs=det_cfg.get('warmup_epochs', 3.0),
         warmup_momentum=det_cfg.get('warmup_momentum', 0.8),
         warmup_bias_lr=det_cfg.get('warmup_bias_lr', 0.1),
-        cos_lr=det_cfg.get('cos_lr', True),
+        cos_lr=det_cfg.get('cos_lr', True),        # Cosine LR decay
         patience=det_cfg.get('patience', 30),
         close_mosaic=det_cfg.get('close_mosaic', 10),
-        # Augmentation
+        # Augmentation parameters from config
         hsv_h=det_cfg.get('hsv_h', 0.015),
         hsv_s=det_cfg.get('hsv_s', 0.7),
         hsv_v=det_cfg.get('hsv_v', 0.4),
@@ -367,6 +390,8 @@ def train_detection(config):
         verbose=config.get('logging', {}).get('verbose', True),
     )
 
+    logger.info(f"Dataset: {yaml_path}")
+
     # ── Log results ──
     best_model_path = os.path.join(export_dir, "yolov8_run", "weights", "best.pt")
     if os.path.exists(best_model_path):
@@ -374,11 +399,13 @@ def train_detection(config):
     else:
         logger.warning(f"Expected best model at {best_model_path} — check training output.")
 
-    # Save class names for inference
+    # Save class names inside the YOLO run dir only (not in root export_dir)
+    # Save class names inside the YOLO run directory
     try:
         class_names = list(model.names.values()) if hasattr(model, 'names') else []
         if class_names:
             cn_path = os.path.join(export_dir, "yolov8_run", "class_names.json")
+            os.makedirs(os.path.dirname(cn_path), exist_ok=True)
             with open(cn_path, 'w') as f:
                 json.dump(class_names, f)
             logger.info(f"Detection class names saved: {cn_path}")

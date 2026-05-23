@@ -21,14 +21,14 @@ The system supports two major pipelines:
 - **Inference**: Configurable confidence/IoU thresholds, Test-Time Augmentation (TTA)
 
 ### Key Accuracy Improvements
-- ✅ Proper 640px training for detection (was 224px)
-- ✅ Cosine LR with warmup (was static LR)
-- ✅ YOLOv8s default (was nano — 30% more accurate)
-- ✅ Mosaic + MixUp + Copy-Paste augmentation
-- ✅ 100 epochs with patience-30 early stopping
-- ✅ BatchNorm frozen during fine-tuning
-- ✅ Label smoothing + weight decay
-- ✅ Configurable all 25+ YOLO hyperparameters
+- Proper 640px training for detection (was 224px)
+- Cosine LR with warmup (was static LR)
+- YOLOv8s default (was nano — 30% more accurate)
+- Mosaic + MixUp + Copy-Paste augmentation
+- 100 epochs with patience-30 early stopping
+- BatchNorm frozen during fine-tuning
+- Label smoothing + weight decay
+- Configurable all 25+ YOLO hyperparameters
 
 ## Directory Structure
 ```
@@ -77,6 +77,19 @@ pip uninstall -y opencv-python-headless
 pip install --force-reinstall opencv-python
 ```
 
+### GPU Acceleration & Troubleshooting
+To enable GPU acceleration (highly recommended for training), check if PyTorch detects your NVIDIA GPU:
+```bash
+python -c "import torch; print('CUDA Available:', torch.cuda.is_available())"
+```
+If it prints `False` despite having a GPU, you likely installed a CPU-only PyTorch build. Fix it by installing a CUDA-enabled version:
+```bash
+# For CUDA 12.1 (recommended)
+pip install --force-reinstall torch torchvision --index-url https://download.pytorch.org/whl/cu121
+# For CUDA 11.8 (older GPUs)
+pip install --force-reinstall torch torchvision --index-url https://download.pytorch.org/whl/cu118
+```
+
 ## Usage
 
 ### 1. Configure (`configs/config.yaml`)
@@ -95,9 +108,22 @@ data:
   detection_imgsz: 640              # Must be multiple of 32
 ```
 
+### 1.5 Download Open Images Subset (Optional)
+If you want to download a custom subset of the Google Open Images V7 dataset to train your model (requires `fiftyone`):
+```bash
+pip install fiftyone
+python -m src.download_subset --output data/open_images_subset --classes Person Car Dog --samples 1000
+```
+
 ### 2. Train
 ```bash
 python -m src.train --config configs/config.yaml
+```
+
+### 2.5 Verify Config and Training Reconciliation
+To prevent training/eval mismatch issues, use the diagnostic tool to reconcile `configs/config.yaml` parameters with the last actual run config:
+```bash
+python -m src.verify_config
 ```
 
 ### 3. Real-Time Inference
@@ -109,7 +135,7 @@ python -m src.predict --model outputs/models/yolov8_run/weights/best.pt --conf 0
 python -m src.predict --model outputs/models/yolov8_run/weights/best.pt --tta
 
 # Classification
-python -m src.predict --model outputs/models/best_model.keras
+python -m src.predict --model outputs/models/classification/best_model.keras
 ```
 
 ### 4. Evaluate
@@ -118,7 +144,7 @@ python -m src.predict --model outputs/models/best_model.keras
 python -m src.evaluate --model outputs/models/yolov8_run/weights/best.pt --task detection
 
 # Classification — confusion matrix, per-class report
-python -m src.evaluate --model outputs/models/best_model.keras --task classification
+python -m src.evaluate --model outputs/models/classification/best_model.keras --task classification
 ```
 
 ### 5. Benchmark
@@ -132,7 +158,7 @@ python -m src.benchmark --model outputs/models/yolov8_run/weights/best.pt --runs
 python -m src.export --model outputs/models/yolov8_run/weights/best.pt --yolo-format onnx
 
 # TF → TFLite (FP16)
-python -m src.export --model outputs/models/best_model.keras --quantize fp16
+python -m src.export --model outputs/models/classification/best_model.keras --quantize fp16
 ```
 
 ### 7. API Server
@@ -143,9 +169,17 @@ uvicorn src.api:app --host 0.0.0.0 --port 8000
 ```
 
 ### 8. GUI Dashboard
+Launch the comprehensive 5-tab Streamlit dashboard to interact with models, run evaluations, export models, and benchmark:
 ```bash
 streamlit run src/gui_app.py
 ```
+
+#### Key Dashboard Features:
+- 📷 **Inference**: Test model predictions on uploaded images or via live webcam stream.
+- 📊 **Evaluation**: Track mAP metrics, view confusion matrices, and inspect classification Grad-CAM heatmaps.
+- ⚡ **Benchmark**: Evaluate average latency, P95 latency, FPS, and model sizes on your CPU/GPU hardware.
+- 📦 **Export**: Export Keras classification models to TFLite (FP16/INT8) and ONNX, or export YOLO detection models.
+- ℹ️ **Model Info**: View model architectures, layers, active training configuration, classes, and GPU device details.
 
 ### 9. Run Tests
 ```bash

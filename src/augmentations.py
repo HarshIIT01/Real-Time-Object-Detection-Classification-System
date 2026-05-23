@@ -4,7 +4,6 @@ Provides both Keras-layer-based augmentations for classification
 and parameter configs for YOLO detection augmentation.
 """
 import tensorflow as tf
-import numpy as np
 
 
 def get_training_augmentation(image_size, strength="medium"):

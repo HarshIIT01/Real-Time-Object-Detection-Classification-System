@@ -1,0 +1,15 @@
+.git
+venv
+__pycache__
+*.pt
+outputs/
+runs/
+data/
+datasets/
+logs/
+.pytest_cache
+tests/
+Dockerfile
+.dockerignore
+.gitignore
+README.md
